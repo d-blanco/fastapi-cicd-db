@@ -1,5 +1,5 @@
-from fastapi.testclient import TestClient
 from app.main import app, tasks
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -28,7 +28,7 @@ def test_create_task():
     task_data = {
         "title": "Test Task",
         "description": "This is a test task",
-        "completed": False
+        "completed": False,
     }
     response = client.post("/tasks", json=task_data)
     assert response.status_code == 201
@@ -42,7 +42,7 @@ def test_get_tasks():
     # Create a task first
     client.post("/tasks", json={"title": "Task 1", "completed": False})
     client.post("/tasks", json={"title": "Task 2", "completed": True})
-    
+
     response = client.get("/tasks")
     assert response.status_code == 200
     assert len(response.json()) == 2
@@ -52,11 +52,10 @@ def test_get_task_by_id():
     """Test getting a specific task"""
     # Create a task
     create_response = client.post(
-        "/tasks",
-        json={"title": "Specific Task", "completed": False}
+        "/tasks", json={"title": "Specific Task", "completed": False}
     )
     task_id = create_response.json()["id"]
-    
+
     # Get the task
     response = client.get(f"/tasks/{task_id}")
     assert response.status_code == 200
@@ -73,11 +72,10 @@ def test_update_task():
     """Test updating a task"""
     # Create a task
     create_response = client.post(
-        "/tasks",
-        json={"title": "Old Title", "completed": False}
+        "/tasks", json={"title": "Old Title", "completed": False}
     )
     task_id = create_response.json()["id"]
-    
+
     # Update the task
     update_data = {"title": "New Title", "completed": True}
     response = client.put(f"/tasks/{task_id}", json=update_data)
@@ -90,15 +88,14 @@ def test_delete_task():
     """Test deleting a task"""
     # Create a task
     create_response = client.post(
-        "/tasks",
-        json={"title": "Task to Delete", "completed": False}
+        "/tasks", json={"title": "Task to Delete", "completed": False}
     )
     task_id = create_response.json()["id"]
-    
+
     # Delete the task
     response = client.delete(f"/tasks/{task_id}")
     assert response.status_code == 200
-    
+
     # Verify it's deleted
     get_response = client.get(f"/tasks/{task_id}")
     assert get_response.status_code == 404
