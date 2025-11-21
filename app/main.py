@@ -1,89 +1,101 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
-import uvicorn
+from app.main import app, tasks
+from fastapi.testclient import TestClient
 
-app = FastAPI(
-    title="Task Manager API",
-    description="A simple task management API for CI/CD demonstration",
-    version="1.0.0"
-)
-
-# In-memory storage (for demo purposes)
-tasks = []
-task_id_counter = 1
+client = TestClient(app)
 
 
-class Task(BaseModel):
-    id: Optional[int] = None
-    title: str
-    description: Optional[str] = None
-    completed: bool = False
+def setup_function():
+    """Clear tasks before each test"""
+    tasks.clear()
 
 
-@app.get("/")
-def read_root():
-    """Root endpoint returning API information"""
-    return {
-        "message": "Welcome to Task Manager API",
-        "version": "1.0.0",
-        "endpoints": ["/tasks", "/tasks/{task_id}", "/health"]
+def test_read_root():
+    """Test root endpoint"""
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json()["message"] == "Welcome to Task Manager API"
+
+
+def test_health_check():
+    """Test health check endpoint"""
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "healthy"
+
+
+def test_create_task():
+    """Test creating a new task"""
+    task_data = {
+        "title": "Test Task",
+        "description": "This is a test task",
+        "completed": False,
     }
+    response = client.post("/tasks", json=task_data)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Test Task"
+    assert data["id"] is not None
 
 
-@app.get("/health")
-def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+def test_get_tasks():
+    """Test getting all tasks"""
+    # Create a task first
+    client.post("/tasks", json={"title": "Task 1", "completed": False})
+    client.post("/tasks", json={"title": "Task 2", "completed": True})
+
+    response = client.get("/tasks")
+    assert response.status_code == 200
+    assert len(response.json()) == 2
 
 
-@app.get("/tasks", response_model=List[Task])
-def get_tasks():
-    """Get all tasks"""
-    return tasks
+def test_get_task_by_id():
+    """Test getting a specific task"""
+    # Create a task
+    create_response = client.post(
+        "/tasks", json={"title": "Specific Task", "completed": False}
+    )
+    task_id = create_response.json()["id"]
+
+    # Get the task
+    response = client.get(f"/tasks/{task_id}")
+    assert response.status_code == 200
+    assert response.json()["title"] == "Specific Task"
 
 
-@app.get("/tasks/{task_id}", response_model=Task)
-def get_task(task_id: int):
-    """Get a specific task by ID"""
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
-    raise HTTPException(status_code=404, detail="Task not found")
+def test_get_nonexistent_task():
+    """Test getting a task that doesn't exist"""
+    response = client.get("/tasks/999")
+    assert response.status_code == 404
 
 
-@app.post("/tasks", response_model=Task, status_code=201)
-def create_task(task: Task):
-    """Create a new task"""
-    global task_id_counter
-    task_dict = task.dict()
-    task_dict["id"] = task_id_counter
-    task_id_counter += 1
-    tasks.append(task_dict)
-    return task_dict
+def test_update_task():
+    """Test updating a task"""
+    # Create a task
+    create_response = client.post(
+        "/tasks", json={"title": "Old Title", "completed": False}
+    )
+    task_id = create_response.json()["id"]
+
+    # Update the task
+    update_data = {"title": "New Title", "completed": True}
+    response = client.put(f"/tasks/{task_id}", json=update_data)
+    assert response.status_code == 200
+    assert response.json()["title"] == "New Title"
+    assert response.json()["completed"] is True
 
 
-@app.put("/tasks/{task_id}", response_model=Task)
-def update_task(task_id: int, task: Task):
-    """Update an existing task"""
-    for i, existing_task in enumerate(tasks):
-        if existing_task["id"] == task_id:
-            task_dict = task.dict()
-            task_dict["id"] = task_id
-            tasks[i] = task_dict
-            return task_dict
-    raise HTTPException(status_code=404, detail="Task not found")
+def test_delete_task():
+    """Test deleting a task"""
+    # Create a task
+    create_response = client.post(
+        "/tasks", json={"title": "Task to Delete", "completed": False}
+    )
+    task_id = create_response.json()["id"]
 
+    # Delete the task
+    response = client.delete(f"/tasks/{task_id}")
+    assert response.status_code == 200
 
-@app.delete("/tasks/{task_id}")
-def delete_task(task_id: int):
-    """Delete a task"""
-    for i, task in enumerate(tasks):
-        if task["id"] == task_id:
-            tasks.pop(i)
-            return {"message": "Task deleted successfully"}
-    raise HTTPException(status_code=404, detail="Task not found")
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Verify it's deleted
+    get_response = client.get(f"/tasks/{task_id}")
+    assert get_response.status_code == 404
