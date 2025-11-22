@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main ]
 
+
+permissions:
+  contents: read
+  security-events: write  # Required for uploading security scan results
+  id-token: write  # Required if using OIDC for AWS
+
+
 env:
   PYTHON_VERSION: '3.11'
   DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/fastapi-cicd
@@ -132,4 +139,5 @@ jobs:
         with:
 
           sarif_file: 'trivy-results.sarif'
+
 
